@@ -1,4 +1,5 @@
 from flask import Flask
+import os
 import dash
 from dash import dcc, html, Input, Output, dash_table
 import pandas as pd
@@ -1930,6 +1931,11 @@ def home():
     </html>
     """
 
-# Run Flask App
+# # Run Flask App
+# if __name__ == "__main__":
+#     server.run(debug=True, host="0.0.0.0", port=8080)
+
+
 if __name__ == "__main__":
-    server.run(debug=True, host="0.0.0.0", port=8080)
+    port = int(os.environ.get("PORT", 10000))  # Use the port assigned by Render
+    app.run(host="0.0.0.0", port=port)
