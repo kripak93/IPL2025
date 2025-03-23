@@ -47,8 +47,20 @@ app2 = dash.Dash(
 )
 
 try:
-        file_path = 'C:/Users/kripa/Desktop/BallByBall2023(in).csv'
-        df = pd.read_csv(file_path)
+    import os
+import pandas as pd
+
+    # Get the current directory of the running script
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Build the relative path to the CSV file
+    file_path = os.path.join(current_dir, "BallByBall2023(in).csv")
+    
+    # Load the CSV file
+    df = pd.read_csv(file_path)    
+    
+    # file_path = 'C:/Users/kripa/Desktop/BallByBall2023(in).csv'
+    #     df = pd.read_csv(file_path)
         
         # Convert BatsManName and BowlerName to string to handle mixed types
         df['BatsManName'] = df['BatsManName'].astype(str)
@@ -961,11 +973,21 @@ def update_table_and_charts(view_type, selected_player):
     
     return table_data, runs_chart, strike_rate_chart, runs_distribution_chart, wagon_wheel_chart
 
+import os
+import pandas as pd
 
+# Get the current directory of the running script
+current_dir = os.path.dirname(os.path.abspath(__file__))
 
+# Build the relative path to the CSV file
+file_path = os.path.join(current_dir, "BallByBall2023(in).csv")
 
-file_path = 'C:/Users/kripa/Desktop/BallByBall2023(in).csv'
+# Load the CSV file
 df = pd.read_csv(file_path)
+
+
+# file_path = 'C:/Users/kripa/Desktop/BallByBall2023(in).csv'
+# df = pd.read_csv(file_path)
 
 # Convert BatsManName and BowlerName to string to handle mixed types
 df['BatsManName'] = df['BatsManName'].astype(str)
