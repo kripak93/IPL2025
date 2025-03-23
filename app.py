@@ -47,8 +47,7 @@ app2 = dash.Dash(
 )
 
 try:
-    import os
-import pandas as pd
+    
 
     # Get the current directory of the running script
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -62,13 +61,13 @@ import pandas as pd
     # file_path = 'C:/Users/kripa/Desktop/BallByBall2023(in).csv'
     #     df = pd.read_csv(file_path)
         
-        # Convert BatsManName and BowlerName to string to handle mixed types
-        df['BatsManName'] = df['BatsManName'].astype(str)
-        df['BowlerName'] = df['BowlerName'].astype(str)
-        
-                # Extract unique Batsman and bowler names from the dataset (safely)
-        Batsman_names = sorted([str(name) for name in df['BatsManName'].unique() if name is not None and name != 'nan'])
-        bowler_names = sorted([str(name) for name in df['BowlerName'].unique() if name is not None and name != 'nan'])  
+    # Convert BatsManName and BowlerName to string to handle mixed types
+    df['BatsManName'] = df['BatsManName'].astype(str)
+    df['BowlerName'] = df['BowlerName'].astype(str)
+    
+            # Extract unique Batsman and bowler names from the dataset (safely)
+    Batsman_names = sorted([str(name) for name in df['BatsManName'].unique() if name is not None and name != 'nan'])
+    bowler_names = sorted([str(name) for name in df['BowlerName'].unique() if name is not None and name != 'nan'])  
 
         
 except Exception as e:
