@@ -11,26 +11,26 @@ import json
 # Initialize Dash app 1 (Bowler Dashboard)
 app = dash.Dash(
     __name__, 
-    server=server,  # Ensure the Flask server is passed
     url_base_pathname="/bowler-dashboard/",  # Set the base path for the Bowler Dashboard
     external_stylesheets=['https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css']
 )
 
+# Expose server for Gunicorn
+server = app.server  # Ensure the Flask server is passed here
+
+# Define layout for Bowler Dashboard
 app.layout = html.Div("Hello, Bowler Dashboard!")
 
 # Initialize Dash app 2 (Batsman Dashboard)
 app2 = dash.Dash(
     __name__, 
-    server=app.server, 
-    url_base_pathname="/Batsman-dashboard/",
+    server=server,  # Use the same Flask server for both apps
+    url_base_pathname="/batsman-dashboard/",  # Set the base path for the Batsman Dashboard
     external_stylesheets=['https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css']
 )
 
+# Define layout for Batsman Dashboard
 app2.layout = html.Div("Hello, Batsman Dashboard!")
-
-# Expose server for Gunicorn
-server = app.server
-
 
 
 
