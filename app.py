@@ -8,7 +8,14 @@ import plotly.graph_objects as go
 import json
 
 # Initialize Flask app
-server = Flask(__name__)
+#server = Flask(__name__)
+
+app = Dash(__name__)
+
+app.layout = html.Div("Hello, Heroku!")
+
+# Expose server for Gunicorn
+server = app.server 
 
 # Load CSV data
 
