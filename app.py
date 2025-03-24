@@ -7,17 +7,29 @@ import plotly.express as px
 import plotly.graph_objects as go
 import json
 
-# Initialize Flask app
-#server = Flask(__name__)
 
-app = Dash(__name__)
+# Initialize Dash app 1 (Bowler Dashboard)
+app = dash.Dash(
+    __name__, 
+    server=server,  # Ensure the Flask server is passed
+    url_base_pathname="/bowler-dashboard/",  # Set the base path for the Bowler Dashboard
+    external_stylesheets=['https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css']
+)
 
-app.layout = html.Div("Hello, Heroku!")
+app.layout = html.Div("Hello, Bowler Dashboard!")
+
+# Initialize Dash app 2 (Batsman Dashboard)
+app2 = dash.Dash(
+    __name__, 
+    server=app.server, 
+    url_base_pathname="/Batsman-dashboard/",
+    external_stylesheets=['https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css']
+)
+
+app2.layout = html.Div("Hello, Batsman Dashboard!")
 
 # Expose server for Gunicorn
-server = app.server 
-
-# Load CSV data
+server = app.server
 
 
 
@@ -33,25 +45,25 @@ COLORS = {
     'chart': ['#1E88E5', '#FFC107', '#4CAF50', '#FF5722', '#9C27B0', '#E91E63'] # Chart colors
 }
 
-# Initialize Dash app 1 (Bowler Dashboard)
-app = dash.Dash(
-    __name__, 
-    server=server, 
-    url_base_pathname="/bowler-dashboard/",
-    external_stylesheets=[
-        'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css'
-    ]
-)
+# # Initialize Dash app 1 (Bowler Dashboard)
+# app = dash.Dash(
+#     __name__, 
+#     server=server, 
+#     url_base_pathname="/bowler-dashboard/",
+#     external_stylesheets=[
+#         'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css'
+#     ]
+# )
 
-# Initialize Dash app 2 (Batsman Dashboard)
-app2 = dash.Dash(
-    __name__, 
-    server=server, 
-    url_base_pathname="/Batsman-dashboard/",
-    external_stylesheets=[
-        'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css'
-    ]
-)
+# # Initialize Dash app 2 (Batsman Dashboard)
+# app2 = dash.Dash(
+#     __name__, 
+#     server=server, 
+#     url_base_pathname="/Batsman-dashboard/",
+#     external_stylesheets=[
+#         'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css'
+#     ]
+# )
 
 try:
     
