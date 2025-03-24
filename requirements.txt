@@ -6,14 +6,12 @@ charset-normalizer==3.4.1
 click==8.1.8
 colorama==0.4.6
 comm==0.2.2
-dash==2.18.2
 dash-core-components==2.0.0
 dash-html-components==2.0.0
 dash-table==5.0.0
 debugpy==1.8.12
 decorator==5.2.1
 executing==2.2.0
-Flask==3.0.3
 idna==3.10
 importlib_metadata==8.6.1
 ipykernel==6.29.5
@@ -54,5 +52,5 @@ urllib3==2.3.0
 wcwidth==0.2.13
 Werkzeug==3.0.6
 zipp==3.21.0
-gunicorn==21.2.0
+dash[gunicorn]==2.18.2
 
