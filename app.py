@@ -1903,7 +1903,13 @@ def update_dashboard(view_type, selected_bowler, over_name, bowl_type, outcome_f
     return table_data, economy_chart, dot_ball_chart, bowl_type_chart, runs_distribution_chart, pitch_map
 
 # Replace 'YourUsername' with your actual username and 'data.csv' with your actual file name
-file_path = 'C:/Users/kripa/Desktop/IPL_23_24.csv'
+#file_path = 'C:/Users/kripa/Desktop/IPL_23_24.csv'
+
+# Get the current directory of the running script
+current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Build the relative path to the CSV file
+file_path = os.path.join(current_dir, "IPL_23_24.csv")
 
 # Read the CSV file
 combined_df = pd.read_csv(file_path)
