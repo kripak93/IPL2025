@@ -1909,8 +1909,8 @@ def update_dashboard(view_type, selected_bowler, over_name, bowl_type, outcome_f
 current_dir = os.path.dirname(os.path.abspath(__file__))
     
     # Build the relative path to the CSV file
-file_path1 = os.path.join(current_dir, "IPL_23_1.csv")
-file_path2 = os.path.join(current_dir, "IPL_23_2.csv")
+file_path1 = os.path.join(current_dir, "IPL_23_HE_part1.csv")
+file_path2 = os.path.join(current_dir, "IPL_23_HE_part2.csv")
 
 
 
