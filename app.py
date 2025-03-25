@@ -1909,10 +1909,23 @@ def update_dashboard(view_type, selected_bowler, over_name, bowl_type, outcome_f
 current_dir = os.path.dirname(os.path.abspath(__file__))
     
     # Build the relative path to the CSV file
-file_path = os.path.join(current_dir, "IPL_23_24.csv")
+file_path1 = os.path.join(current_dir, "IPL_23_1.csv")
+file_path2 = os.path.join(current_dir, "IPL_23_2.csv")
 
-# Read the CSV file
-combined_df = pd.read_csv(file_path)
+
+
+def load_data():
+    # Load both parts
+    df_part1 = pd.read_csv(file_path1)
+    df_part2 = pd.read_csv(file_path1)
+    
+    # Combine into one DataFrame
+    combined_df = pd.concat([df_part1, df_part2], ignore_index=True)
+    
+    return combined_df
+
+# Usage
+combined_df = load_data()
 
 
 
