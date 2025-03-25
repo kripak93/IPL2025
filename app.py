@@ -1912,20 +1912,11 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 file_path1 = os.path.join(current_dir, "IPL_23_HE_part1.csv")
 file_path2 = os.path.join(current_dir, "IPL_23_HE_part2.csv")
 
+df_part1 = pd.read_csv(file_path1)
+df_part2 = pd.read_csv(file_path2)
 
+combined_df = pd.concat([df_part1, df_part2], ignore_index=True)
 
-def load_data():
-    # Load both parts
-    df_part1 = pd.read_csv(file_path1)
-    df_part2 = pd.read_csv(file_path2)
-    
-    # Combine into one DataFrame
-    combined_df = pd.concat([df_part1, df_part2], ignore_index=True)
-    
-    return combined_df
-
-# Usage
-combined_df = load_data()
 
 
 
