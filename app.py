@@ -1,3 +1,5 @@
+
+
 from flask import Flask
 import os
 import dash
@@ -6,33 +8,46 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import json
+import numpy as np
+import re
+import dash
+from dash import dcc, html, dash_table
+import dash_bootstrap_components as dbc
+from dash.dependencies import Input, Output, State
+import pandas as pd
+import plotly.express as px
+import numpy as np
 
 
-# Initialize Dash app 1 (Bowler Dashboard)
+# Initialize the Flask server (only once)
+server = Flask(__name__)
+
+# Initialize Dash apps with the same server
 app = dash.Dash(
-    __name__, 
-    url_base_pathname="/bowler-dashboard/",  # Set the base path for the Bowler Dashboard
+    __name__,
+    server=server,
+    url_base_pathname="/bowler-dashboard/",
     external_stylesheets=['https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css']
 )
 
-# Expose server for Gunicorn
-server = app.server  # Ensure the Flask server is passed here
-
-# Define layout for Bowler Dashboard
-app.layout = html.Div("Hello, Bowler Dashboard!")
-
-# Initialize Dash app 2 (Batsman Dashboard)
 app2 = dash.Dash(
-    __name__, 
-    server=server,  # Use the same Flask server for both apps
-    url_base_pathname="/batsman-dashboard/",  # Set the base path for the Batsman Dashboard
+    __name__,
+    server=server,
+    url_base_pathname="/batsman-dashboard/",
     external_stylesheets=['https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css']
 )
 
-# Define layout for Batsman Dashboard
+app3 = dash.Dash(
+    __name__,
+    server=server,
+    url_base_pathname="/speed-dashboard/",
+    external_stylesheets=['https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css', dbc.themes.BOOTSTRAP]
+)
+
+# Define Dash app layouts
+app.layout = html.Div("Hello, Bowler Dashboard!")
 app2.layout = html.Div("Hello, Batsman Dashboard!")
-
-
+app3.layout = html.Div("Hello, Speed Dashboard!")
 
 # Define color scheme
 COLORS = {
@@ -45,25 +60,6 @@ COLORS = {
     'chart': ['#1E88E5', '#FFC107', '#4CAF50', '#FF5722', '#9C27B0', '#E91E63'] # Chart colors
 }
 
-# # Initialize Dash app 1 (Bowler Dashboard)
-# app = dash.Dash(
-#     __name__, 
-#     server=server, 
-#     url_base_pathname="/bowler-dashboard/",
-#     external_stylesheets=[
-#         'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css'
-#     ]
-# )
-
-# # Initialize Dash app 2 (Batsman Dashboard)
-# app2 = dash.Dash(
-#     __name__, 
-#     server=server, 
-#     url_base_pathname="/Batsman-dashboard/",
-#     external_stylesheets=[
-#         'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css'
-#     ]
-# )
 
 try:
     
@@ -1906,72 +1902,360 @@ def update_dashboard(view_type, selected_bowler, over_name, bowl_type, outcome_f
 
     return table_data, economy_chart, dot_ball_chart, bowl_type_chart, runs_distribution_chart, pitch_map
 
+# Replace 'YourUsername' with your actual username and 'data.csv' with your actual file name
+file_path = 'C:/Users/kripa/Desktop/IPL_23_24.csv'
+
+# Read the CSV file
+combined_df = pd.read_csv(file_path)
 
 
-# Home Route
+
+def process_cricket_data(df):
+    """
+    Process cricket data and create processed dataframe with required transformations.
+    
+    Args:
+        df (pd.DataFrame): Raw cricket data
+        
+    Returns:
+        pd.DataFrame: Processed data ready for visualization
+    """
+    # Convert MPH to KPH (handle null values)
+    df['Speed'] = df['match.delivery.trajectory.releaseSpeed'].astype(float) * 1.60934
+
+    # Extract venue (stadium) from text
+    def extract_venue(text):
+        if isinstance(text, str):
+            match = re.search(r'_([^_]*)-(?!.*-)', text)
+            if match:
+                return match.group(1)
+        return 'Unknown'
+    
+    df['VENUE'] = df['match.name'].apply(extract_venue)
+
+    # Create over segment
+    def get_over_segment(over):
+        try:
+            over = float(over)
+            if over <= 5:
+                return 'POWERPLAY'
+            elif 6 <= over <= 10:
+                return 'MP1'
+            elif 11 <= over <= 15:
+                return 'MP2'
+            else:
+                return 'DEATH'
+        except:
+            return 'Unknown'
+    
+    df['OVER_SEGMENT'] = df['match.delivery.deliveryNumber.over'].apply(get_over_segment)
+    
+    # Remove negative scores and invalid data
+    processed_df = df[
+        (df['match.delivery.scoringInformation.score'] >= 0) & 
+        (df['match.delivery.deliveryNumber.ball'] > 0)
+    ].copy()
+    
+    # Calculate strike rate (handle division by zero)
+    processed_df['STRIKE_RATE'] = (
+        processed_df['match.delivery.scoringInformation.score'] / 
+        processed_df['match.delivery.deliveryNumber.ball'].replace(0, np.nan) * 100
+    ).round(2)
+    
+    # Rename columns for clarity
+    processed_df = processed_df.rename(columns={
+        'match.battingTeam.batsman.name': 'BATSMAN',
+        'match.delivery.deliveryNumber.ball': 'BALLS_FACED',
+        'match.delivery.scoringInformation.score': 'RUNS_SCORED',
+        'match.delivery.deliveryType': 'DELIVERY_TYPE',
+        'match.delivery.deliveryNumber.innings': 'INNINGS_NUMBER'
+    })
+    
+    # Add cumulative totals by batsman
+    processed_df['TOTAL_BALLS'] = processed_df.groupby('BATSMAN')['BALLS_FACED'].cumcount()
+    processed_df['TOTAL_RUNS'] = processed_df.groupby('BATSMAN')['RUNS_SCORED'].cumsum()
+    
+    # Define speed bins and labels
+    bins = [0, 80, 85, 90, 120, 130, 140, 150, np.inf]
+    labels = ['<80', '81-85', '86-90', '91-120', '121-130', '131-140', '141-150', '>150']
+
+    # Assign speed categories (handle null values)
+    processed_df['SPEED_CATEGORY'] = pd.cut(
+        processed_df['Speed'].fillna(0), 
+        bins=bins, 
+        labels=labels, 
+        right=False
+    )
+    
+    return processed_df
+
+# Process data
+processed_data = process_cricket_data(combined_df)
+
+def create_dashboard(processed_data):
+    """Create and return the dashboard app with all its components."""
+    
+    # Ensure consistent data types
+    processed_data['match.delivery.deliveryNumber.over'] = processed_data['match.delivery.deliveryNumber.over'].astype(str)
+    processed_data['DELIVERY_TYPE'] = processed_data['DELIVERY_TYPE'].fillna('Unknown').astype(str)
+    processed_data['YEAR'] = processed_data['YEAR'].astype(int)
+    processed_data['BATSMAN'] = processed_data['BATSMAN'].astype(str)
+    
+    # Get unique values for filters
+    filters = {
+        'over_segments': sorted(processed_data['match.delivery.deliveryNumber.over'].unique()),
+        'years': sorted(processed_data['YEAR'].unique()),
+        'innings': sorted(processed_data['INNINGS_NUMBER'].unique()),
+        'delivery_types': sorted(processed_data['DELIVERY_TYPE'].unique()),
+        'speed_categories': sorted(processed_data['SPEED_CATEGORY'].dropna().unique()),
+        'batsmen': sorted(processed_data['BATSMAN'].unique())
+    }
+
+    # Dashboard layout
+    app3.layout = dbc.Container([
+        dbc.Row([dbc.Col(html.H1("Cricket Speed Analytics Dashboard", className="text-center text-primary my-4"))]),
+        
+        # Filters Section
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader("Filters", className="bg-primary text-white"),
+                    dbc.CardBody([
+                        dbc.Row([
+                            dbc.Col([
+                                html.Label("Batsman"),
+                                dcc.Dropdown(
+                                    id='batsman-dropdown',
+                                    options=[{'label': b, 'value': b} for b in filters['batsmen']],
+                                    multi=True,
+                                    placeholder="Select Batsmen"
+                                )
+                            ], width=6),
+                            dbc.Col([
+                                html.Label("Year"),
+                                dcc.Dropdown(
+                                    id='year-dropdown',
+                                    options=[{'label': str(y), 'value': y} for y in filters['years']],
+                                    multi=True,
+                                    placeholder="Select Years"
+                                )
+                            ], width=6),
+                        ]),
+                        dbc.Row([
+                            dbc.Col([
+                                html.Label("Over Segment"),
+                                dcc.Dropdown(
+                                    id='over-segment-dropdown',
+                                    options=[{'label': s, 'value': s} for s in filters['over_segments']],
+                                    multi=True,
+                                    placeholder="Select Segments"
+                                )
+                            ], width=6),
+                            dbc.Col([
+                                html.Label("Delivery Type"),
+                                dcc.Dropdown(
+                                    id='delivery-type-dropdown',
+                                    options=[{'label': d, 'value': d} for d in filters['delivery_types']],
+                                    multi=True,
+                                    placeholder="Select Delivery Types"
+                                )
+                            ], width=6),
+                        ]),
+                        dbc.Row([  
+                            dbc.Col([  
+                                html.Label("Speed Category"),  
+                                dcc.Dropdown(  
+                                    id='speed-category-dropdown',  
+                                    options=[{'label': sc, 'value': sc} for sc in filters['speed_categories']],  
+                                    multi=True,  
+                                    placeholder="Select Speed Categories"  
+                                )  
+                            ], width=6),  
+                        ]),
+                        dbc.Button("Apply Filters", id="apply-filters", color="primary", className="mt-2")
+                    ])
+                ])
+            ])
+        ]),
+
+        # Graphs Section
+        dbc.Row([
+            dbc.Col(dcc.Graph(id='performance-chart'), width=8),
+            dbc.Col(dcc.Graph(id='speed-distribution'), width=4)
+        ]),
+
+        # Data Table Section
+        dbc.Row([
+            dbc.Col(dash_table.DataTable(
+                id='stats-table',
+                style_table={'overflowX': 'auto'},
+                style_cell={
+                    'minWidth': '100px', 'width': '150px', 'maxWidth': '300px',
+                    'whiteSpace': 'normal',
+                    'textAlign': 'left'
+                },
+                page_size=10
+            ))
+        ]),
+
+        # Trends Section
+        dbc.Row([
+            dbc.Col(dcc.Graph(id='trend-chart'))
+        ]),
+    ], fluid=True)
+
+    # Dashboard Callback
+    @app3.callback(
+        [Output('performance-chart', 'figure'),
+         Output('speed-distribution', 'figure'),
+         Output('trend-chart', 'figure'),
+         Output('stats-table', 'data'),
+         Output('stats-table', 'columns')],
+        [Input('apply-filters', 'n_clicks')],
+        [State('batsman-dropdown', 'value'),
+         State('year-dropdown', 'value'),
+         State('over-segment-dropdown', 'value'),
+         State('delivery-type-dropdown', 'value'),
+         State('speed-category-dropdown', 'value')]
+    )
+    def update_dashboard(n_clicks, batsmen, years, segments, delivery_types, speed_categories):
+        # Start with full dataset
+        filtered_df = processed_data.copy()
+        
+        # Apply filters only if values are selected
+        if batsmen:
+            filtered_df = filtered_df[filtered_df['BATSMAN'].isin(batsmen)]
+        if years:
+            filtered_df = filtered_df[filtered_df['YEAR'].isin(years)]
+        if segments:
+            filtered_df = filtered_df[filtered_df['match.delivery.deliveryNumber.over'].isin(segments)]
+        if delivery_types:
+            filtered_df = filtered_df[filtered_df['DELIVERY_TYPE'].isin(delivery_types)]
+        if speed_categories:
+            filtered_df = filtered_df[filtered_df['SPEED_CATEGORY'].isin(speed_categories)]
+
+        # Group and aggregate data
+        grouped_df = filtered_df.groupby(
+            ['BATSMAN', 'YEAR', 'match.delivery.deliveryNumber.over', 'DELIVERY_TYPE', 'SPEED_CATEGORY'],
+            as_index=False
+        ).agg({
+            'RUNS_SCORED': 'sum',
+            'BALLS_FACED': 'count',
+            'Speed': 'mean'
+        }).rename(columns={'Speed': 'AVG_SPEED'})
+
+        # Calculate strike rate (handle division by zero)
+        grouped_df['STRIKE_RATE'] = (grouped_df['RUNS_SCORED'] / 
+                                    grouped_df['BALLS_FACED'].replace(0, np.nan) * 100).round(2)
+        
+        # Create visualizations
+        perf_chart = px.bar(
+            grouped_df,
+            x='SPEED_CATEGORY',
+            y='STRIKE_RATE',
+            color='BATSMAN',
+            title="Strike Rate by Speed Category",
+            labels={'STRIKE_RATE': 'Strike Rate', 'SPEED_CATEGORY': 'Speed (kph)'}
+        )
+        
+        speed_dist_chart = px.histogram(
+            grouped_df,
+            x='SPEED_CATEGORY',
+            title="Speed Distribution",
+            color='DELIVERY_TYPE'
+        )
+        
+        trend_chart = px.line(
+            grouped_df,
+            x='YEAR',
+            y='STRIKE_RATE',
+            color='BATSMAN',
+            title="Performance Trend Over Years",
+            markers=True
+        )
+
+        # Prepare table data
+        table_data = grouped_df.to_dict('records')
+        table_columns = [{'name': col, 'id': col} for col in grouped_df.columns]
+
+        return perf_chart, speed_dist_chart, trend_chart, table_data, table_columns
+    
+
+
+# Create dashboard
+create_dashboard(processed_data)    
+
+# Define the home route (must come AFTER Dash apps are initialized)
 @server.route("/")
 def home():
-    return f"""
+    return """
     <!DOCTYPE html>
     <html>
     <head>
         <title>Cricket Analytics</title>
         <style>
-            body {{
+            body {
                 font-family: "Segoe UI", Arial, sans-serif;
-                background-color: {COLORS['background']};
-                color: {COLORS['text']};
+                background-color: #f5f5f5;
+                color: #333;
                 margin: 0;
                 padding: 0;
                 display: flex;
                 justify-content: center;
                 align-items: center;
                 height: 100vh;
-            }}
-            .container {{
+            }
+            .container {
                 text-align: center;
                 background-color: white;
                 padding: 40px;
                 border-radius: 10px;
                 box-shadow: 0 4px 8px rgba(0,0,0,0.1);
                 max-width: 600px;
-            }}
-            h1 {{
-                color: {COLORS['primary']};
+            }
+            h1 {
+                color: #1976D2;
                 margin-top: 0;
-            }}
-            p {{
+            }
+            p {
                 margin: 20px 0;
                 line-height: 1.6;
-            }}
-            .btn {{
+            }
+            .btn-container {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .btn {
                 display: inline-block;
-                background-color: {COLORS['primary']};
+                background-color: #1976D2;
                 color: white;
                 text-decoration: none;
                 padding: 12px 24px;
                 border-radius: 4px;
                 font-weight: bold;
                 transition: background-color 0.3s;
-            }}
-            .btn:hover {{
+            }
+            .btn:hover {
                 background-color: #1565C0;
-            }}
+            }
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>IPL Prep 2025</h1>
-            <p>Explore detailed analytics for bowlers and players.</p>
-            <a href="/bowler-dashboard/" class="btn">Bowler Dashboard</a>
-            <a href="
-            /Batsman-dashboard/" class="btn">Batsman Dashboard</a>
+            <h1>Cricket Analytics Dashboard</h1>
+            <p>Explore detailed analytics for bowlers, batsmen, and bowling speeds.</p>
+            <div class="btn-container">
+                <a href="/bowler-dashboard/" class="btn">Bowler Dashboard</a>
+                <a href="/batsman-dashboard/" class="btn">Batsman Dashboard</a>
+                <a href="/speed-dashboard/" class="btn">Speed Dashboard</a>
+            </div>
         </div>
     </body>
     </html>
     """
 
-# # Run Flask App
+
 # if __name__ == "__main__":
 #     server.run(debug=True, host="0.0.0.0", port=8080)
 
