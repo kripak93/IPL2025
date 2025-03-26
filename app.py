@@ -97,18 +97,17 @@ except Exception as e:
 def analyze_post_dot_ball_response(df):
     """
     Analyze how batsmen respond when facing a ball after two consecutive dot balls,
-    using commentary text to identify dot balls.
+    with breakdown by bowl type.
 
     Args:
     df: DataFrame containing cricket match data with NewCommentry, BatsManName, 
-        ActualRuns, BallNo, ShotType, XLanding, and YLanding columns.
+        ActualRuns, BallNo, ShotType, XLanding, YLanding, and BowlTypeName columns.
 
     Returns:
     Tuple of DataFrames:
-    - Aggregated analysis of runs scored, shot type, and response metrics.
+    - Aggregated analysis of runs scored, shot type, and response metrics by bowl type.
     - Raw coordinates and detailed shot data for individual balls after consecutive dots.
     """
-
     # Create a copy to avoid modifying original
     analysis_df = df.copy()
 
@@ -132,21 +131,20 @@ def analyze_post_dot_ball_response(df):
     # Identify where two consecutive dot balls occurred
     analysis_df['after_consecutive_dots'] = (
         (analysis_df['prev_dot'] == 1) & 
-        (analysis_df['prev_prev_dot'] == 1)
-    )
-
+        (analysis_df['prev_prev_dot'] == 1))
+    
     # Get the results for balls after consecutive dots
     results = analysis_df[analysis_df['after_consecutive_dots']].copy()
 
     # If no results found, return empty DataFrames
     if len(results) == 0:
         empty_aggregated = pd.DataFrame(columns=[
-            'BatsManName', 'INSTANCES', 'TOTAL_RUNS', 'AVG_RUNS',
+            'BatsManName', 'BowlTypeName', 'INSTANCES', 'TOTAL_RUNS', 'AVG_RUNS',
             'MOST_COMMON_SHOT', 'STRIKE_RATE', 'SHOT_BREAKDOWN', 'RUNS_BREAKDOWN',
             'TOTAL_CONSECUTIVE_DOT_INSTANCES', 'PERCENTAGE_OF_TOTAL_INSTANCES'
         ])
         empty_raw = pd.DataFrame(columns=['BatsManName', 'XLanding', 'YLanding', 'ActualRuns', 'ShotType'])
-        return empty_aggregated, empty_raw
+        return empty_aggregated, empty_raw, pd.DataFrame()
 
     # Function to safely get most common shot type
     def get_most_common_shot(x):
@@ -154,20 +152,16 @@ def analyze_post_dot_ball_response(df):
         return counts.index[0] if len(counts) > 0 else 'NA'
     
     # Extract unique wicket types only for rows where IsWicket == 1
-    wicket_types = results[results['IsWicket'] == 1].groupby('BatsManName')['WicketType'] \
-    .apply(lambda x: list(x.unique())).reset_index()
+    wicket_types = results[results['IsWicket'] == 1].groupby(['BatsManName', 'BowlTypeName'])['WicketType'] \
+        .apply(lambda x: list(x.unique())).reset_index()
+    wicket_types.columns = ['BatsManName', 'BowlTypeName', 'WICKET_TYPES']
 
-    wicket_types.columns = ['BatsManName', 'WICKET_TYPES']
-
-    # Aggregations
-    instances = results.groupby('BatsManName')['after_consecutive_dots'].count()
-    total_runs = results.groupby('BatsManName')['ActualRuns'].sum()
-    # Calculate the total wickets
-    total_wickets = results.groupby('BatsManName')['IsWicket'].sum()
-    avg_runs = results.groupby('BatsManName')['ActualRuns'].mean()
-    most_common_shots = results.groupby('BatsManName')['ShotType'].agg(get_most_common_shot)
-
-    
+    # Aggregations - now grouping by both BatsManName and BowlTypeName
+    instances = results.groupby(['BatsManName', 'BowlTypeName'])['after_consecutive_dots'].count()
+    total_runs = results.groupby(['BatsManName', 'BowlTypeName'])['ActualRuns'].sum()
+    total_wickets = results.groupby(['BatsManName', 'BowlTypeName'])['IsWicket'].sum()
+    avg_runs = results.groupby(['BatsManName', 'BowlTypeName'])['ActualRuns'].mean()
+    most_common_shots = results.groupby(['BatsManName', 'BowlTypeName'])['ShotType'].agg(get_most_common_shot)
 
     # Create final aggregated DataFrame
     aggregated_results = pd.DataFrame({
@@ -175,21 +169,20 @@ def analyze_post_dot_ball_response(df):
         'TOTAL_RUNS': total_runs,
         'AVG_RUNS': avg_runs,
         'MOST_COMMON_SHOT': most_common_shots,
-        'Total_Wickets' : total_wickets
+        'Total_Wickets': total_wickets
     }).reset_index()
 
     # Calculate strike rate (runs per ball * 100)
     aggregated_results['STRIKE_RATE'] = (aggregated_results['AVG_RUNS'] * 100).round(2)
     aggregated_results['AVG_RUNS'] = aggregated_results['AVG_RUNS'].round(2)
     
-
     # Merge with wicket types
-    aggregated_results = aggregated_results.merge(wicket_types, on='BatsManName', how='left')
+    aggregated_results = aggregated_results.merge(wicket_types, on=['BatsManName', 'BowlTypeName'], how='left')
 
     # Safely convert WICKET_TYPES to a comma-separated string
     aggregated_results['WICKET_TYPES'] = aggregated_results['WICKET_TYPES'].apply(
-    lambda x: ', '.join(map(str, x)) if isinstance(x, list) else ''
-)
+        lambda x: ', '.join(map(str, x)) if isinstance(x, list) else ''
+    )
 
     # Add detailed shot breakdown
     def get_shot_breakdown(group):
@@ -201,19 +194,19 @@ def analyze_post_dot_ball_response(df):
         runs_counts = group['ActualRuns'].value_counts()
         return {str(int(runs)): int(count) for runs, count in runs_counts.items()} if not runs_counts.empty else {'0': 0}
 
-    shot_breakdown = results.groupby('BatsManName').apply(get_shot_breakdown).reset_index()
-    shot_breakdown.columns = ['BatsManName', 'SHOT_BREAKDOWN']
+    shot_breakdown = results.groupby(['BatsManName', 'BowlTypeName']).apply(get_shot_breakdown).reset_index()
+    shot_breakdown.columns = ['BatsManName', 'BowlTypeName', 'SHOT_BREAKDOWN']
 
-    runs_breakdown = results.groupby('BatsManName').apply(get_runs_breakdown).reset_index()
-    runs_breakdown.columns = ['BatsManName', 'RUNS_BREAKDOWN']
+    runs_breakdown = results.groupby(['BatsManName', 'BowlTypeName']).apply(get_runs_breakdown).reset_index()
+    runs_breakdown.columns = ['BatsManName', 'BowlTypeName', 'RUNS_BREAKDOWN']
 
     # Convert dictionary to string for display in table
     shot_breakdown['SHOT_BREAKDOWN'] = shot_breakdown['SHOT_BREAKDOWN'].apply(lambda x: json.dumps(x))
     runs_breakdown['RUNS_BREAKDOWN'] = runs_breakdown['RUNS_BREAKDOWN'].apply(lambda x: json.dumps(x))
 
     # Merge breakdowns with final results
-    aggregated_results = aggregated_results.merge(shot_breakdown, on='BatsManName')
-    aggregated_results = aggregated_results.merge(runs_breakdown, on='BatsManName')
+    aggregated_results = aggregated_results.merge(shot_breakdown, on=['BatsManName', 'BowlTypeName'])
+    aggregated_results = aggregated_results.merge(runs_breakdown, on=['BatsManName', 'BowlTypeName'])
 
     # Add total dot ball statistics
     total_consecutive_dots = len(results)
@@ -222,17 +215,12 @@ def analyze_post_dot_ball_response(df):
         (aggregated_results['INSTANCES'] / total_consecutive_dots * 100).round(2))
 
     # Create raw coordinates DataFrame
-    # Drop rows where 'BatType' is NaN
     results1 = results.dropna(subset=['BatType'])
-    # Correct conversion to integer type
     results1['IsWicket'] = results1['IsWicket'].astype('int')
 
-    
-
-    raw_coordinates = results1[['BatsManName', 'XLanding', 'YLanding', 'ActualRuns','BatType', 'ShotType','IsWicket']].copy()
+    raw_coordinates = results1[['BatsManName', 'BowlTypeName', 'XLanding', 'YLanding', 'ActualRuns', 'BatType', 'ShotType', 'IsWicket']].copy()
     raw_coordinates_with_wickets = results[results['IsWicket'] == 1].copy()
     
-
     return aggregated_results.sort_values('INSTANCES', ascending=False), raw_coordinates, raw_coordinates_with_wickets
 
 
@@ -655,6 +643,9 @@ app2.index_string = '''
 </html>
 '''
 
+   # Extract unique BowlType names from the dataset
+bowl_types = sorted([str(btype) for btype in df['BowlTypeName'].unique() if btype is not None and btype != 'nan'])
+
 # Dash layout setup
 app2.layout = html.Div(className='dashboard-container', children=[
     # Header
@@ -664,37 +655,51 @@ app2.layout = html.Div(className='dashboard-container', children=[
                style={'textAlign': 'center', 'marginTop': '10px', 'opacity': '0.8'})
     ]),
 
-    # Control Panel Card
-    html.Div(className='card', children=[
-        html.H3("Control Panel", className='card-title'),
-        html.Div(className='selector-container', children=[
-            # View Type Selection
-            html.Div(style={'flex': '1', 'minWidth': '250px'}, children=[
-                html.Label("Select Analysis View:", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
-                dcc.RadioItems(
-                    id='view-type',
-                    options=[
-                        {'label': html.Span([html.I(className="fas fa-users", style={'marginRight': '5px'}), 'All Players']), 'value': 'all'},
-                        {'label': html.Span([html.I(className="fas fa-user", style={'marginRight': '5px'}), 'Individual Player']), 'value': 'individual'},
-                    ],
-                    value='all',
-                    style={'marginTop': '8px'},
-                    labelStyle={'marginRight': '15px', 'display': 'inline-block'}
-                ),
-            ]),
-            
-            # Player Dropdown
-            html.Div(id='player-selection-container', style={'flex': '2', 'minWidth': '250px'}, children=[
-                html.Label("Select Player:", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
-                dcc.Dropdown(
-                    id='player-dropdown',
-                    options=[{'label': player, 'value': player} for player in player_names],
-                    value=player_names[0] if player_names else None,
-                    style={'width': '100%'}
-                )
-            ]),
-        ])
-    ]),
+ 
+
+# Update the control panel card in your layout
+html.Div(className='card', children=[
+    html.H3("Control Panel", className='card-title'),
+    html.Div(className='selector-container', children=[
+        # View Type Selection
+        html.Div(style={'flex': '1', 'minWidth': '250px'}, children=[
+            html.Label("Select Analysis View:", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
+            dcc.RadioItems(
+                id='view-type',
+                options=[
+                    {'label': html.Span([html.I(className="fas fa-users", style={'marginRight': '5px'}), 'All Players']), 'value': 'all'},
+                    {'label': html.Span([html.I(className="fas fa-user", style={'marginRight': '5px'}), 'Individual Player']), 'value': 'individual'},
+                ],
+                value='all',
+                style={'marginTop': '8px'},
+                labelStyle={'marginRight': '15px', 'display': 'inline-block'}
+            ),
+        ]),
+        
+        # Player Dropdown
+        html.Div(id='player-selection-container', style={'flex': '2', 'minWidth': '250px'}, children=[
+            html.Label("Select Player:", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
+            dcc.Dropdown(
+                id='player-dropdown',
+                options=[{'label': player, 'value': player} for player in player_names],
+                value=player_names[0] if player_names else None,
+                style={'width': '100%'}
+            )
+        ]),
+        
+        # Bowl Type Dropdown
+        html.Div(style={'flex': '2', 'minWidth': '250px'}, children=[
+            html.Label("Select Bowl Type:", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
+            dcc.Dropdown(
+                id='bowl-type-dropdown',
+                options=[{'label': 'All Bowl Types', 'value': 'all'}] + 
+                        [{'label': btype, 'value': btype} for btype in bowl_types],
+                value='all',
+                style={'width': '100%'}
+            )
+        ]),
+    ])
+]),
 
     # Performance Table Card
     html.Div(className='card', children=[
@@ -790,7 +795,6 @@ def toggle_player_dropdown_and_wagon_wheel(view_type):
     else:
         return {**base_style, 'display': 'none'}, {'display': 'none'}
 
-# Callback to update table, charts, and wagon wheel
 @app2.callback(
     [Output('performance-table', 'data'),
      Output('runs-chart', 'figure'),
@@ -798,18 +802,29 @@ def toggle_player_dropdown_and_wagon_wheel(view_type):
      Output('runs-distribution-chart', 'figure'),
      Output('wagon-wheel-chart', 'figure')],
     [Input('view-type', 'value'),
-     Input('player-dropdown', 'value')]
+     Input('player-dropdown', 'value'),
+     Input('bowl-type-dropdown', 'value')]
 )
-def update_table_and_charts(view_type, selected_player):
+def update_table_and_charts(view_type, selected_player, selected_bowl_type):
+    # First get all data
+    aggregated_df, raw_coordinates, raw_coordinates_with_wickets = analyze_post_dot_ball_response(df)
+    
+    # Filter by bowl type if not 'all'
+    if selected_bowl_type != 'all':
+        aggregated_df = aggregated_df[aggregated_df['BowlTypeName'] == selected_bowl_type]
+        raw_coordinates = raw_coordinates[raw_coordinates['BowlTypeName'] == selected_bowl_type]
+        raw_coordinates_with_wickets = raw_coordinates_with_wickets[raw_coordinates_with_wickets['BowlTypeName'] == selected_bowl_type]
+    
     if view_type == 'all':
-        # Analyze all data
-        aggregated_df, raw_coordinates, raw_coordinates_with_wickets = analyze_post_dot_ball_response(df)
+        # Analyze all data (already filtered by bowl type if applicable)
         wagon_wheel_chart = go.Figure()  # Empty figure for all players view
     else:
         # Filter data for the selected player
         if selected_player:
-            player_data = df[df['BatsManName'] == selected_player]
-            aggregated_df, raw_coordinates, raw_coordinates_with_wickets = analyze_post_dot_ball_response(player_data)
+            aggregated_df = aggregated_df[aggregated_df['BatsManName'] == selected_player]
+            raw_coordinates = raw_coordinates[raw_coordinates['BatsManName'] == selected_player]
+            raw_coordinates_with_wickets = raw_coordinates_with_wickets[raw_coordinates_with_wickets['BatsManName'] == selected_player]
+            
             # Generate wagon wheel for individual player
             if not raw_coordinates.empty:
                 raw_df_clean = raw_coordinates.dropna(subset=['XLanding', 'YLanding', 'ActualRuns'])
@@ -819,14 +834,15 @@ def update_table_and_charts(view_type, selected_player):
                     y_col='XLanding',
                     player_name='BatsManName',
                     player_batting_types='BatType',
-                    title=f'Wagon Wheel - {selected_player}'
+                    title=f'Wagon Wheel - {selected_player}' + 
+                         (f' ({selected_bowl_type})' if selected_bowl_type != 'all' else '')
                 )
             else:
                 wagon_wheel_chart = go.Figure()  # Empty figure if no data
         else:
             # If no player selected, return empty data
             aggregated_df = pd.DataFrame(columns=[
-                'BatsManName', 'INSTANCES', 'TOTAL_RUNS', 'AVG_RUNS', 'MOST_COMMON_SHOT', 
+                'BatsManName', 'BowlTypeName', 'INSTANCES', 'TOTAL_RUNS', 'AVG_RUNS', 'MOST_COMMON_SHOT', 
                 'STRIKE_RATE', 'SHOT_BREAKDOWN', 'RUNS_BREAKDOWN',
                 'TOTAL_CONSECUTIVE_DOT_INSTANCES', 'PERCENTAGE_OF_TOTAL_INSTANCES'
             ])
@@ -835,9 +851,8 @@ def update_table_and_charts(view_type, selected_player):
     # Convert DataFrame to dictionary for table
     table_data = aggregated_df.to_dict('records')
 
-    # Create charts (same as before)
+    # Create charts (similar to before but now includes bowl type in titles and groupings)
     if len(aggregated_df) > 0:
-        # Set up common styling for plots
         plot_layout = {
             'font': {'family': '"Segoe UI", Arial, sans-serif'},
             'plot_bgcolor': 'white',
@@ -856,7 +871,8 @@ def update_table_and_charts(view_type, selected_player):
                 plot_data, 
                 x='BatsManName', 
                 y='TOTAL_RUNS',
-                title='Total Runs After Consecutive Dot Balls',
+                title='Total Runs After Consecutive Dot Balls' + 
+                     (f' ({selected_bowl_type})' if selected_bowl_type != 'all' else ''),
                 labels={'BatsManName': 'Player', 'TOTAL_RUNS': 'Total Runs'},
                 color='TOTAL_RUNS',
                 color_continuous_scale=px.colors.sequential.Blues,
@@ -870,7 +886,8 @@ def update_table_and_charts(view_type, selected_player):
                 plot_data,
                 x='BatsManName', 
                 y='STRIKE_RATE',
-                title='Strike Rate After Consecutive Dot Balls',
+                title='Strike Rate After Consecutive Dot Balls' + 
+                     (f' ({selected_bowl_type})' if selected_bowl_type != 'all' else ''),
                 labels={'BatsManName': 'Player', 'STRIKE_RATE': 'Strike Rate'},
                 color='STRIKE_RATE',
                 color_continuous_scale=px.colors.sequential.Greens,
@@ -897,72 +914,51 @@ def update_table_and_charts(view_type, selected_player):
             
         else:  # Individual player view
             # For individual player, focus on their performance details
-            player_row = aggregated_df[aggregated_df['BatsManName'] == selected_player].iloc[0] if len(aggregated_df) > 0 else None
-            
-            if player_row is not None:
-                # Extract shots data
-                shot_breakdown = json.loads(player_row['SHOT_BREAKDOWN']) if type(player_row['SHOT_BREAKDOWN']) == str else {}
-                shot_df = pd.DataFrame(list(shot_breakdown.items()), columns=['Shot', 'Count'])
-                shot_df = shot_df.sort_values('Count', ascending=False)
+            if selected_bowl_type == 'all':
+                # Show breakdown by bowl type if "All Bowl Types" selected
+                plot_data = aggregated_df
                 
-                # Extract runs data
-                runs_breakdown = json.loads(player_row['RUNS_BREAKDOWN']) if type(player_row['RUNS_BREAKDOWN']) == str else {}
-                runs_df = pd.DataFrame(list(runs_breakdown.items()), columns=['Runs', 'Count'])
-                runs_df['Runs'] = runs_df['Runs'].astype(int)
-                runs_df = runs_df.sort_values('Runs')
+                # Total Runs Chart by Bowl Type
+                runs_chart = px.bar(
+                    plot_data, 
+                    x='BowlTypeName', 
+                    y='TOTAL_RUNS',
+                    title=f"{selected_player}'s Runs by Bowl Type",
+                    labels={'BowlTypeName': 'Bowl Type', 'TOTAL_RUNS': 'Total Runs'},
+                    color='TOTAL_RUNS',
+                    color_continuous_scale=px.colors.sequential.Blues,
+                    text='TOTAL_RUNS'
+                )
+                runs_chart.update_traces(texttemplate='%{text}', textposition='outside')
+                runs_chart.update_layout(**plot_layout)
                 
-                # Map runs to labels
-                runs_labels = {
+                # Strike Rate Chart by Bowl Type
+                strike_rate_chart = px.bar(
+                    plot_data,
+                    x='BowlTypeName', 
+                    y='STRIKE_RATE',
+                    title=f"{selected_player}'s Strike Rate by Bowl Type",
+                    labels={'BowlTypeName': 'Bowl Type', 'STRIKE_RATE': 'Strike Rate'},
+                    color='STRIKE_RATE',
+                    color_continuous_scale=px.colors.sequential.Greens,
+                    text='STRIKE_RATE'
+                )
+                strike_rate_chart.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+                strike_rate_chart.update_layout(**plot_layout)
+                
+                # Pie chart for runs distribution across all bowl types
+                runs_distribution = raw_coordinates.groupby('ActualRuns').size().reset_index(name='Count')
+                runs_distribution['Label'] = runs_distribution['ActualRuns'].map({
                     0: 'Dot Ball',
                     1: 'Single', 
                     2: 'Double',
                     3: 'Triple',
                     4: 'Boundary',
                     6: 'Six'
-                }
-                runs_df['Label'] = runs_df['Runs'].map(lambda x: runs_labels.get(x, f"{x} Runs"))
+                })
                 
-                # Shot type chart  
-                runs_chart = px.bar(
-                    shot_df,
-                    x='Shot',
-                    y='Count',
-                    title=f"{selected_player}'s Shot Selection",
-                    labels={'Shot': 'Shot Type', 'Count': 'Number of Times Played'},
-                    color='Count',
-                    color_continuous_scale=px.colors.sequential.Blues,
-                    text='Count'
-                )
-                runs_chart.update_traces(texttemplate='%{text}', textposition='outside')
-                runs_chart.update_layout(**plot_layout)
-                
-                # Strike rate comparison to average
-                all_player_avg = aggregated_df['STRIKE_RATE'].mean()
-                player_sr = player_row['STRIKE_RATE']
-                
-                sr_comparison = pd.DataFrame([
-                    {'Category': f"{selected_player}", 'Strike Rate': player_sr},
-                    {'Category': 'All Players Avg', 'Strike Rate': all_player_avg}
-                ])
-                
-                strike_rate_chart = px.bar(
-                    sr_comparison,
-                    x='Category',
-                    y='Strike Rate',
-                    title='Strike Rate Comparison',
-                    color='Category',
-                    text='Strike Rate',
-                    color_discrete_map={
-                        f"{selected_player}": COLORS['primary'],
-                        'All Players Avg': COLORS['secondary']
-                    }
-                )
-                strike_rate_chart.update_traces(texttemplate='%{text:.1f}', textposition='outside')
-                strike_rate_chart.update_layout(**plot_layout)
-                
-                # Pie chart for runs distribution
                 runs_distribution_chart = px.pie(
-                    runs_df,
+                    runs_distribution,
                     values='Count',
                     names='Label',
                     title=f"{selected_player}'s Runs Distribution",
@@ -976,13 +972,93 @@ def update_table_and_charts(view_type, selected_player):
                 runs_distribution_chart.update_traces(textinfo='percent+label')
                 
             else:
-                # Empty charts if player data not found
-                runs_chart = px.bar(title=f"No data available for {selected_player}")
-                strike_rate_chart = px.bar(title=f"No data available for {selected_player}")
-                runs_distribution_chart = px.pie(title=f"No data available for {selected_player}")
+                # For specific bowl type selected, show individual player's performance
+                player_row = aggregated_df.iloc[0] if len(aggregated_df) > 0 else None
                 
-                for chart in [runs_chart, strike_rate_chart, runs_distribution_chart]:
-                    chart.update_layout(**plot_layout)
+                if player_row is not None:
+                    # Extract shots data
+                    shot_breakdown = json.loads(player_row['SHOT_BREAKDOWN']) if type(player_row['SHOT_BREAKDOWN']) == str else {}
+                    shot_df = pd.DataFrame(list(shot_breakdown.items()), columns=['Shot', 'Count'])
+                    shot_df = shot_df.sort_values('Count', ascending=False)
+                    
+                    # Extract runs data
+                    runs_breakdown = json.loads(player_row['RUNS_BREAKDOWN']) if type(player_row['RUNS_BREAKDOWN']) == str else {}
+                    runs_df = pd.DataFrame(list(runs_breakdown.items()), columns=['Runs', 'Count'])
+                    runs_df['Runs'] = runs_df['Runs'].astype(int)
+                    runs_df = runs_df.sort_values('Runs')
+                    
+                    # Map runs to labels
+                    runs_labels = {
+                        0: 'Dot Ball',
+                        1: 'Single', 
+                        2: 'Double',
+                        3: 'Triple',
+                        4: 'Boundary',
+                        6: 'Six'
+                    }
+                    runs_df['Label'] = runs_df['Runs'].map(lambda x: runs_labels.get(x, f"{x} Runs"))
+                    
+                    # Shot type chart  
+                    runs_chart = px.bar(
+                        shot_df,
+                        x='Shot',
+                        y='Count',
+                        title=f"{selected_player}'s Shot Selection ({selected_bowl_type})",
+                        labels={'Shot': 'Shot Type', 'Count': 'Number of Times Played'},
+                        color='Count',
+                        color_continuous_scale=px.colors.sequential.Blues,
+                        text='Count'
+                    )
+                    runs_chart.update_traces(texttemplate='%{text}', textposition='outside')
+                    runs_chart.update_layout(**plot_layout)
+                    
+                    # Strike rate comparison to average
+                    all_player_avg = aggregated_df['STRIKE_RATE'].mean()
+                    player_sr = player_row['STRIKE_RATE']
+                    
+                    sr_comparison = pd.DataFrame([
+                        {'Category': f"{selected_player}", 'Strike Rate': player_sr},
+                        {'Category': 'All Players Avg', 'Strike Rate': all_player_avg}
+                    ])
+                    
+                    strike_rate_chart = px.bar(
+                        sr_comparison,
+                        x='Category',
+                        y='Strike Rate',
+                        title=f'Strike Rate Comparison ({selected_bowl_type})',
+                        color='Category',
+                        text='Strike Rate',
+                        color_discrete_map={
+                            f"{selected_player}": COLORS['primary'],
+                            'All Players Avg': COLORS['secondary']
+                        }
+                    )
+                    strike_rate_chart.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+                    strike_rate_chart.update_layout(**plot_layout)
+                    
+                    # Pie chart for runs distribution
+                    runs_distribution_chart = px.pie(
+                        runs_df,
+                        values='Count',
+                        names='Label',
+                        title=f"{selected_player}'s Runs Distribution ({selected_bowl_type})",
+                        color_discrete_sequence=px.colors.sequential.RdBu,
+                        hole=0.4,
+                    )
+                    runs_distribution_chart.update_layout(
+                        title={'text': f"{selected_player}'s Runs Distribution ({selected_bowl_type})", 'x': 0.5, 'xanchor': 'center'},
+                        **plot_layout
+                    )
+                    runs_distribution_chart.update_traces(textinfo='percent+label')
+                    
+                else:
+                    # Empty charts if player data not found
+                    runs_chart = px.bar(title=f"No data available for {selected_player}")
+                    strike_rate_chart = px.bar(title=f"No data available for {selected_player}")
+                    runs_distribution_chart = px.pie(title=f"No data available for {selected_player}")
+                    
+                    for chart in [runs_chart, strike_rate_chart, runs_distribution_chart]:
+                        chart.update_layout(**plot_layout)
     else:
         # Empty charts if no data
         runs_chart = px.bar(title="No data available")
