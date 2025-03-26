@@ -110,7 +110,7 @@ def analyze_post_dot_ball_response(df):
     """
     # Create a copy to avoid modifying original
     analysis_df = df.copy()
-    analysis_df = analysis_df.sort_values(by=['MatchID', 'InningsNo', 'OverNo', 'BallNo'])
+    
 
 
 
@@ -1152,7 +1152,7 @@ def analyze_post_boundary_response(df, bowler_names=None, grouping_columns=None)
     """
     # Create a copy to avoid modifying original
     analysis_df = df.copy()
-    analysis_df = analysis_df.sort_values(by=['MatchID', 'InningsNo', 'OverNo', 'BallNo'])
+   
 
 
     
