@@ -712,6 +712,7 @@ html.Div(className='card', children=[
                 id='performance-table',
                 columns=[
                     {'name': 'Batsman', 'id': 'BatsManName'},
+                    {'name': 'BowlTypeName', 'id': 'BowlTypeName'},
                     {'name': 'Instances', 'id': 'INSTANCES', 'type': 'numeric'},
                     {'name': 'Total Runs', 'id': 'TOTAL_RUNS', 'type': 'numeric'},
                     {'name': 'Average Runs', 'id': 'AVG_RUNS', 'type': 'numeric', 'format': {'specifier': '.2f'}},
@@ -721,7 +722,7 @@ html.Div(className='card', children=[
                     #{'name': 'Runs Breakdown', 'id': 'RUNS_BREAKDOWN'},
                     {'name': 'Total wickets', 'id': 'Total_Wickets', 'type': 'numeric'},
                     {'name': 'WICKET_TYPES', 'id': 'WICKET_TYPES'},
-                    {'name': '% of Total Cases', 'id': 'PERCENTAGE_OF_TOTAL_INSTANCES', 'type': 'numeric', 'format': {'specifier': '.2f'}}
+                    #{'name': '% of Total Cases', 'id': 'PERCENTAGE_OF_TOTAL_INSTANCES', 'type': 'numeric', 'format': {'specifier': '.2f'}}
                 ],
                 style_cell={
                     'whiteSpace': 'normal',  # Allows text to wrap within cells
