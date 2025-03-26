@@ -1056,30 +1056,36 @@ df.reset_index(drop=True, inplace=True)
 
 
 
-# Function to analyze post-boundary bowler response
-def analyze_post_boundary_response(df, grouping_columns=None):
+# Function to analyze post-boundary bowler response (enhanced for multiple bowlers)
+def analyze_post_boundary_response(df, bowler_names=None, grouping_columns=None):
     """
     Analyze how bowlers respond when bowling a ball after conceding a boundary (four or six),
-    with flexible grouping options.
+    with flexible grouping options and support for multiple bowlers.
     
     Args:
     df: DataFrame containing cricket match data with relevant columns.
+    bowler_names: List of bowler names to filter by. If None, analyzes all bowlers.
     grouping_columns: List of column names to group by. 
-                      Defaults to ['BowlerName', 'BowlTypeName'] if None.
+                      Defaults to ['BowlerName', 'BowlTypeName', 'OverName'] if None.
     
     Returns:
     Tuple of (aggregated results DataFrame, filtered raw results DataFrame)
     """
-    
     # Create a copy to avoid modifying original
     analysis_df = df.copy()
+    
+    # Filter by bowler names if provided
+    if bowler_names is not None:
+        if isinstance(bowler_names, str):
+            bowler_names = [bowler_names]
+        analysis_df = analysis_df[analysis_df['BowlerName'].isin(bowler_names)]
     
     # Ensure numeric types
     analysis_df['ActualRuns'] = pd.to_numeric(analysis_df['ActualRuns'], errors='coerce')
     
     # Default grouping if not provided
     if grouping_columns is None:
-        grouping_columns = ['BowlerName', 'BowlTypeName', 'OverName']  # Include OverName and BowlTypeName
+        grouping_columns = ['BowlerName', 'BowlTypeName', 'OverName']
     
     # Ensure all specified grouping columns exist
     for col in grouping_columns:
@@ -1106,8 +1112,6 @@ def analyze_post_boundary_response(df, grouping_columns=None):
     # Filter for balls bowled after boundaries
     results = analysis_df[analysis_df['after_boundary']].copy()
 
-   
-    
     if results.empty:
         return pd.DataFrame(columns=grouping_columns + [
             'INSTANCES', 'TOTAL_RUNS_CONCEDED', 'AVG_RUNS_CONCEDED',
@@ -1115,7 +1119,6 @@ def analyze_post_boundary_response(df, grouping_columns=None):
             'ECONOMY_RATE', 'RUNS_BREAKDOWN', 'WICKETS', 'TOTAL_BOUNDARY_INSTANCES',
             'PERCENTAGE_OF_TOTAL_INSTANCES'
         ]), pd.DataFrame()
-    
     
     # Perform aggregations based on provided grouping columns
     # Instances count
@@ -1169,17 +1172,10 @@ def analyze_post_boundary_response(df, grouping_columns=None):
     total_boundary_instances = len(results)
     final_results['TOTAL_BOUNDARY_INSTANCES'] = total_boundary_instances
     final_results['PERCENTAGE_OF_TOTAL_INSTANCES'] = (
-        (final_results['INSTANCES'] / total_boundary_instances * 100).round(2)
-    )
+        (final_results['INSTANCES'] / total_boundary_instances * 100).round(2))
     
     return final_results.sort_values('INSTANCES', ascending=False), results
 
-
-
-
-    
-
-    
 # If Xpitch and Ypitch don't exist, create them with placeholder values for visualization
 if 'Xpitch_meters' not in df.columns:
     # Creating random X values between -1.5 and 1.5 (typical pitch width in meters)
@@ -1190,11 +1186,6 @@ if 'Ypitch_meters' not in df.columns:
     # Creating random Y values between 0 and 20 (typical pitch length in meters)
     df['Ypitch_meters'] = np.random.uniform(0, 20, len(df))
     
-# except Exception as e:
-#     print(f"Error loading data: {e}")
-#     # Create a sample dataframe if file cannot be loaded
-#     df = pd.DataFrame()
-
 # Extract unique bowler names from the dataset (safely)
 bowler_names = sorted([str(name) for name in df['BowlerName'].unique() if name is not None and name != 'nan'])
 
@@ -1333,8 +1324,6 @@ def create_3d_pitch_map(df, title="3D Pitch Map - Line and Length"):
         opacity=0.9,
         name="Pitch Surface"
     ))
-
-    
     
     # Add crease lines
     # Batting crease
@@ -1391,37 +1380,48 @@ def create_3d_pitch_map(df, title="3D Pitch Map - Line and Length"):
         # Default Z values if not provided
         z_values = df['ZPitch'] if 'ZPitch' in df.columns else np.ones(len(df)) * 0.2
         
-        # Color by runs or default
-        color_values = df['ActualRuns'] if 'ActualRuns' in df.columns else np.ones(len(df))
-        
-        # Ball trajectory (optional enhancement)
-        if 'BowlerEndX' in df.columns and 'BowlerEndY' in df.columns:
-            for i in range(len(df)):
-                # Draw trajectory line for each delivery
-                fig.add_trace(go.Scatter3d(
-                    x=[df['BowlerEndX'].iloc[i], df['Xpitch_meters'].iloc[i]],
-                    y=[df['BowlerEndY'].iloc[i], df['Ypitch_meters'].iloc[i]],
-                    z=[1.8, z_values.iloc[i]],  # Approximate release height
-                    mode='lines',
-                    line=dict(
-                        color='rgba(150,150,150,0.5)',
-                        width=2,
-                        dash='dot'
-                    ),
-                    showlegend=False
-                ))
-        
-        # Add balls as 3D markers
-        fig.add_trace(go.Scatter3d(
-            x=df['Xpitch_meters'],
-            y=df['Ypitch_meters'],
-            z=z_values,
-            mode='markers',
-            marker=dict(
-                size=10,
-                color=color_values,
-                colorscale='RdYlGn_r',  # Red for high runs, green for low
-                colorbar=dict(title='Runs Conceded'),
+        # Color by bowler if multiple bowlers are present
+        if 'BowlerName' in df.columns and len(df['BowlerName'].unique()) > 1:
+            # Create a color mapping for bowlers
+            bowlers = df['BowlerName'].unique()
+            color_map = {bowler: idx for idx, bowler in enumerate(bowlers)}
+            color_values = df['BowlerName'].map(color_map)
+            
+            fig.add_trace(go.Scatter3d(
+                x=df['Xpitch_meters'],
+                y=df['Ypitch_meters'],
+                z=z_values,
+                mode='markers',
+                marker=dict(
+                    size=10,
+                    color=color_values,
+                    colorscale='Viridis',
+                    colorbar=dict(title='Bowler'),
+                opacity=0.8,
+                symbol='circle',
+            ),
+            hovertemplate='<b>Bowler:</b> %{text}<br>' +
+                         '<b>Runs:</b> %{marker.color}<br>' +
+                         '<b>Line:</b> %{x:.2f}<br>' +
+                         '<b>Length:</b> %{y:.2f}<br>' +
+                         '<b>Height:</b> %{z:.2f}<extra></extra>',
+            text=df['BowlerName'],
+            name='Deliveries'
+            ))
+        else:
+            # Default coloring by runs
+            color_values = df['ActualRuns'] if 'ActualRuns' in df.columns else np.ones(len(df))
+            
+            fig.add_trace(go.Scatter3d(
+                x=df['Xpitch_meters'],
+                y=df['Ypitch_meters'],
+                z=z_values,
+                mode='markers',
+                marker=dict(
+                    size=10,
+                    color=color_values,
+                    colorscale='RdYlGn_r',  # Red for high runs, green for low
+                    colorbar=dict(title='Runs Conceded'),
                 opacity=0.8,
                 symbol='circle',
             ),
@@ -1430,7 +1430,7 @@ def create_3d_pitch_map(df, title="3D Pitch Map - Line and Length"):
                          '<b>Length:</b> %{y:.2f}<br>' +
                          '<b>Height:</b> %{z:.2f}<extra></extra>',
             name='Deliveries'
-        ))
+            ))
     
     # Update layout for 3D view
     fig.update_layout(
@@ -1476,8 +1476,6 @@ def create_3d_pitch_map(df, title="3D Pitch Map - Line and Length"):
     
     return fig
 
-
-
 # Dash layout setup
 app.layout = html.Div(className='dashboard-container', children=[
     # Header
@@ -1488,59 +1486,61 @@ app.layout = html.Div(className='dashboard-container', children=[
     ]),
 
     # Control Panel Card
-html.Div(className='card', children=[
-    html.H3("Control Panel", className='card-title'),
-    
-    html.Div(className='selector-container', children=[
-        # View Type Selection
-        html.Div(style={'flex': '1', 'minWidth': '250px'}, children=[
-            html.Label("Select Analysis View:", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
-            dcc.RadioItems(
-                id='view-type',
-                options=[
-                    {'label': html.Span([html.I(className="fas fa-users", style={'marginRight': '5px'}), 'All Bowlers']), 'value': 'all'},
-                    {'label': html.Span([html.I(className="fas fa-user", style={'marginRight': '5px'}), 'Individual Bowler']), 'value': 'individual'},
-                ],
-                value='all',
-                style={'marginTop': '8px'},
-                labelStyle={'marginRight': '15px', 'display': 'inline-block'}
-            ),
-        ]),
+    html.Div(className='card', children=[
+        html.H3("Control Panel", className='card-title'),
         
-        # Bowler Dropdown
-        html.Div(id='bowler-selection-container', style={'flex': '2', 'minWidth': '250px'}, children=[
-            html.Label("Select Bowler:", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
-            dcc.Dropdown(
-                id='bowler-dropdown',
-                options=[{'label': bowler, 'value': bowler} for bowler in bowler_names],
-                value=bowler_names[0] if bowler_names else None,
-                style={'width': '100%'}
-            )
-        ]),
-        
-        # OverName Dropdown Container
-        html.Div(id='over-dropdown-container', style={'flex': '1', 'minWidth': '250px'}, children=[
-            html.Label("Select Over:", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
-            dcc.Dropdown(
-                id='over-dropdown',
-                options=[{'label': over, 'value': over} for over in df['OverName'].unique()],
-                value=None,  # Default to no selection (show all overs)
-                style={'width': '100%'}
-            )
-        ]),
+        html.Div(className='selector-container', children=[
+            # View Type Selection
+            html.Div(style={'flex': '1', 'minWidth': '250px'}, children=[
+                html.Label("Select Analysis View:", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
+                dcc.RadioItems(
+                    id='view-type',
+                    options=[
+                        {'label': html.Span([html.I(className="fas fa-users", style={'marginRight': '5px'}), 'All Bowlers']), 'value': 'all'},
+                        {'label': html.Span([html.I(className="fas fa-user", style={'marginRight': '5px'}), 'Compare Bowlers (up to 5)']), 'value': 'individual'},
+                    ],
+                    value='all',
+                    style={'marginTop': '8px'},
+                    labelStyle={'marginRight': '15px', 'display': 'inline-block'}
+                ),
+            ]),
+            
+            # Bowler Dropdown
+            html.Div(id='bowler-selection-container', style={'flex': '2', 'minWidth': '250px'}, children=[
+                html.Label("Select Bowler(s):", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
+                dcc.Dropdown(
+                    id='bowler-dropdown',
+                    options=[{'label': bowler, 'value': bowler} for bowler in bowler_names],
+                    value=[bowler_names[0]] if bowler_names else None,
+                    multi=True,
+                    style={'width': '100%'},
+                    placeholder="Select up to 5 bowlers...",
+                )
+            ]),
+            
+            # OverName Dropdown Container
+            html.Div(id='over-dropdown-container', style={'flex': '1', 'minWidth': '250px'}, children=[
+                html.Label("Select Over:", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
+                dcc.Dropdown(
+                    id='over-dropdown',
+                    options=[{'label': over, 'value': over} for over in df['OverName'].unique()],
+                    value=None,
+                    style={'width': '100%'}
+                )
+            ]),
 
-        # BowlTypeName Dropdown Container
-        html.Div(id='bowl-type-dropdown-container', style={'flex': '1', 'minWidth': '250px'}, children=[
-            html.Label("Select Bowl Type:", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
-            dcc.Dropdown(
-                id='bowl-type-dropdown',
-                options=[{'label': bowl_type, 'value': bowl_type} for bowl_type in df['BowlTypeName'].unique()],
-                value=None,  # Default to no selection (show all bowl types)
-                style={'width': '100%'}
-            )
+            # BowlTypeName Dropdown Container
+            html.Div(id='bowl-type-dropdown-container', style={'flex': '1', 'minWidth': '250px'}, children=[
+                html.Label("Select Bowl Type:", style={'fontWeight': 'bold', 'marginBottom': '8px', 'display': 'block'}),
+                dcc.Dropdown(
+                    id='bowl-type-dropdown',
+                    options=[{'label': bowl_type, 'value': bowl_type} for bowl_type in df['BowlTypeName'].unique()],
+                    value=None,
+                    style={'width': '100%'}
+                )
+            ]),
         ]),
-    ]),  # Close selector-container
-]),  # Close Control Panel Card
+    ]),
                 
     # Performance Table Card
     html.Div(className='card', children=[
@@ -1603,9 +1603,6 @@ html.Div(className='card', children=[
         ]),
     ]),
     
-    
-
-    
     # Charts Card
     html.Div(className='card', children=[
         html.H3("Performance Visualization", className='card-title'),
@@ -1647,20 +1644,30 @@ html.Div(className='card', children=[
                     {'label': 'Wickets', 'value': 'wicket'},
                     {'label': 'Boundaries', 'value': 'boundary'}
                 ],
-                value='all',  # Default selection
+                value='all',
                 labelStyle={'marginRight': '15px', 'display': 'inline-block'}
             )
         ]),
         
         # Pitch Map Visualization
         dcc.Graph(id='pitch-map', style={'height': '600px'})
-]),
+    ]),
 ])
+
+# Callback to limit bowler selection to 5
+@app.callback(
+    Output('bowler-dropdown', 'value'),
+    [Input('bowler-dropdown', 'value')]
+)
+def limit_bowler_selection(selected_bowlers):
+    if selected_bowlers and len(selected_bowlers) > 5:
+        return selected_bowlers[:5]
+    return selected_bowlers
 
 # Callback to show/hide bowler dropdown based on view type
 @app.callback(
     Output('bowler-selection-container', 'style'),
-    Input('view-type', 'value')
+    [Input('view-type', 'value')]
 )
 def toggle_bowler_dropdown(view_type):
     base_style = {'flex': '2', 'minWidth': '250px'}
@@ -1672,7 +1679,7 @@ def toggle_bowler_dropdown(view_type):
 # Callback to show/hide pitch filter based on view type
 @app.callback(
     Output('pitch-filter-container', 'style'),
-    Input('view-type', 'value')
+    [Input('view-type', 'value')]
 )
 def toggle_pitch_filter(view_type):
     if view_type == 'individual':
@@ -1683,7 +1690,7 @@ def toggle_pitch_filter(view_type):
 # Callback to show/hide individual bowler charts
 @app.callback(
     Output('individual-charts-container', 'style'),
-    Input('view-type', 'value')
+    [Input('view-type', 'value')]
 )
 def toggle_individual_charts(view_type):
     if view_type == 'individual':
@@ -1691,6 +1698,7 @@ def toggle_individual_charts(view_type):
     else:
         return {'display': 'none'}
 
+# Main callback to update all dashboard components
 @app.callback(
     [Output('performance-table', 'data'),
      Output('economy-chart', 'figure'),
@@ -1704,9 +1712,9 @@ def toggle_individual_charts(view_type):
      Input('bowl-type-dropdown', 'value'),
      Input('pitch-outcome-filter', 'value')]
 )
-def update_dashboard(view_type, selected_bowler, over_name, bowl_type, outcome_filter):
+def update_dashboard(view_type, selected_bowlers, over_name, bowl_type, outcome_filter):
     # Start with the full dataset
-    df_filtered = df
+    df_filtered = df.copy()
 
     # Filter data based on OverName
     if over_name:
@@ -1716,34 +1724,36 @@ def update_dashboard(view_type, selected_bowler, over_name, bowl_type, outcome_f
     if bowl_type:
         df_filtered = df_filtered[df_filtered['BowlTypeName'] == bowl_type]
 
-    # Debugging: Print the filtered data
-    print(f"Filtered data (after over and bowl type filtering): {df_filtered.head()}")
-
     # Analyze data based on view type
     if view_type == 'all':
         # Analyze all bowlers with the applied filters
         analysis_result, detailed_results = analyze_post_boundary_response(df_filtered)
-        analysis_result1, detailed_results1 = analyze_post_boundary_response(df_filtered, ['BowlerName','BowlTypeName'])
-        analysis_result2, detailed_results2 = analyze_post_boundary_response(df_filtered, ['BowlerName','OverName'])
+        analysis_result1, detailed_results1 = analyze_post_boundary_response(df_filtered, grouping_columns=['BowlerName', 'BowlTypeName'])
+        analysis_result2, detailed_results2 = analyze_post_boundary_response(df_filtered, grouping_columns=['BowlerName', 'OverName'])
     else:
-        # Filter for the selected bowler with the applied filters
-        if selected_bowler:
-            df_filtered = df_filtered[df_filtered['BowlerName'] == selected_bowler]
-            analysis_result, detailed_results = analyze_post_boundary_response(df_filtered, grouping_columns=['BowlerName', 'BowlTypeName', 'OverName'])
-            analysis_result1, detailed_results1 = analyze_post_boundary_response(df_filtered, ['BowlerName','BowlTypeName'])
-            analysis_result2, detailed_results2 = analyze_post_boundary_response(df_filtered, ['BowlerName','OverName'])
+        # Filter for the selected bowlers with the applied filters
+        if selected_bowlers:
+            analysis_result, detailed_results = analyze_post_boundary_response(
+                df_filtered, 
+                bowler_names=selected_bowlers,
+                grouping_columns=['BowlerName', 'BowlTypeName', 'OverName']
+            )
+            analysis_result1, detailed_results1 = analyze_post_boundary_response(
+                df_filtered,
+                bowler_names=selected_bowlers,
+                grouping_columns=['BowlerName', 'BowlTypeName']
+            )
+            analysis_result2, detailed_results2 = analyze_post_boundary_response(
+                df_filtered,
+                bowler_names=selected_bowlers,
+                grouping_columns=['BowlerName', 'OverName']
+            )
         else:
-            # If no bowler is selected, return an empty DataFrame
-            analysis_result = pd.DataFrame()
-
-    # Debugging: Print the final analysis result
-    print(f"Analysis result: {analysis_result.head()}")
+            # If no bowler is selected, return empty DataFrames
+            return [], px.bar(title="Please select at least one bowler"), px.bar(title="Please select at least one bowler"), px.pie(title="Please select at least one bowler"), create_3d_pitch_map(pd.DataFrame(), title="No Data Available")
 
     # Convert DataFrame to dictionary for table
     table_data = analysis_result.to_dict('records')
-
-    # Debugging: Print the table data
-    print(f"Table data: {table_data}")
 
     # Set up common styling for plots
     plot_layout = {
@@ -1825,86 +1835,85 @@ def update_dashboard(view_type, selected_bowler, over_name, bowl_type, outcome_f
                 pitch_map = create_3d_pitch_map(pd.DataFrame(), title="No Data Available")
 
         else:
-            # Ensure a bowler is selected
-            if not selected_bowler:
-                return table_data, px.bar(title="No Bowler Selected"), px.bar(title="No Bowler Selected"), px.pie(title="No Bowler Selected"), create_3d_pitch_map(pd.DataFrame(), title="No Data Available")
-
-            # Filter for selected bowler
-            filtered_analysis = analysis_result[analysis_result['BowlerName'] == selected_bowler]
-            filtered_results = detailed_results[detailed_results['BowlerName'] == selected_bowler]
-            filtered_analysis1 = analysis_result1[analysis_result1['BowlerName'] == selected_bowler]
-            filtered_analysis2 = analysis_result2[analysis_result2['BowlerName'] == selected_bowler]
-            
-            print(f"View type: {view_type}")
-            print(f"Selected bowler: {selected_bowler}")
-            print(f"Selected over: {over_name}")
-            print(f"Selected bowl type: {bowl_type}")
-            print(f"Filtered data (before analysis): {df_filtered.head()}")
-
-            if len(filtered_analysis1) > 0:
-                # Economy Rate Chart (single bar for selected bowler)
+            # For individual view with multiple bowlers
+            if len(selected_bowlers) > 0:
+                # Economy Rate Chart (multiple bars for selected bowlers)
                 economy_chart = px.bar(
-                    filtered_analysis1, 
-                    x='BowlTypeName', 
+                    analysis_result1, 
+                    x='BowlerName', 
                     y='ECONOMY_RATE',
-                    title=f'Economy After Conceding a Boundary:<br>{selected_bowler}',
-                    labels={'BowlTypeName': 'Bowl Type', 'ECONOMY_RATE': 'Economy Rate'},
+                    color='BowlTypeName',
+                    title='Economy After Conceding a Boundary',
+                    labels={'BowlerName': 'Bowler', 'ECONOMY_RATE': 'Economy Rate'},
+                    barmode='group',
                     text='INSTANCES'
                 )
                 economy_chart.update_traces(texttemplate='Instances: %{text}', textposition='outside')
                 economy_chart.update_layout(**plot_layout)
-
-                # Dot Ball Percentage Chart (single bar for selected bowler)
+                
+                # Dot Ball Percentage Chart (multiple bars for selected bowlers)
                 dot_ball_chart = px.bar(
-                    filtered_analysis1,
-                    x='BowlTypeName', 
+                    analysis_result1,
+                    x='BowlerName', 
                     y='DOT_BALL_PERCENTAGE',
-                    title=f'Dot Ball % After Conceding a Boundary:<br>{selected_bowler}',
-                    labels={'BowlTypeName': 'Bowl Type', 'DOT_BALL_PERCENTAGE': 'Dot Ball %'},
+                    color='BowlTypeName',
+                    title='Dot Ball % After Conceding a Boundary',
+                    labels={'BowlerName': 'Bowler', 'DOT_BALL_PERCENTAGE': 'Dot Ball %'},
+                    barmode='group',
                     text='INSTANCES'
                 )
                 dot_ball_chart.update_traces(texttemplate='Instances: %{text}', textposition='outside')
                 dot_ball_chart.update_layout(**plot_layout)
-
-                # Bowl Type Chart (single bar for selected bowler)
+                
+                # Bowl Type Chart (multiple bars for selected bowlers)
                 bowl_type_chart = px.bar(
-                    filtered_analysis1,
-                    x='BowlTypeName', 
+                    analysis_result1,
+                    x='BowlerName', 
                     y='TOTAL_RUNS_CONCEDED',
-                    title=f'Runs Conceded After a Boundary:<br>{selected_bowler}',
-                    labels={'BowlTypeName': 'Bowl Type', 'TOTAL_RUNS_CONCEDED': 'Total Runs Conceded'},
+                    color='BowlTypeName',
+                    title='Runs Conceded After a Boundary',
+                    labels={'BowlerName': 'Bowler', 'TOTAL_RUNS_CONCEDED': 'Total Runs Conceded'},
+                    barmode='group',
                     text='INSTANCES'
                 )
                 bowl_type_chart.update_traces(texttemplate='Instances: %{text}', textposition='outside')
                 bowl_type_chart.update_layout(**plot_layout)
-
-                # Runs Distribution Chart (pie chart for selected bowler)
-                runs_distribution_chart = px.pie(
-                    filtered_analysis2,
-                    names='OverName', 
-                    values='TOTAL_RUNS_CONCEDED',
-                    title=f'Runs Distribution After Boundary: {selected_bowler}',
-                    color_discrete_sequence=px.colors.sequential.RdBu
-                )
-                runs_distribution_chart.update_layout(**plot_layout)
-
+                
+                # Runs Distribution Chart (pie chart for selected bowlers)
+                if not analysis_result2.empty:
+                    runs_distribution_chart = px.pie(
+                        analysis_result2,
+                        names='OverName', 
+                        values='TOTAL_RUNS_CONCEDED',
+                        title='Runs Distribution After Boundary',
+                        color_discrete_sequence=px.colors.sequential.RdBu,
+                        facet_col='BowlerName',  # Separate pie charts for each bowler
+                        facet_col_wrap=min(3, len(selected_bowlers))  # Max 3 columns
+                    )
+                    runs_distribution_chart.update_layout(**plot_layout)
+                
                 # Filter based on selected outcome
                 if outcome_filter == 'dot':
-                    filtered_results = filtered_results[filtered_results['ActualRuns'] == 0]
+                    detailed_results = detailed_results[detailed_results['ActualRuns'] == 0]
                 elif outcome_filter == 'runs':
-                    filtered_results = filtered_results[filtered_results['ActualRuns'] > 0]
+                    detailed_results = detailed_results[detailed_results['ActualRuns'] > 0]
                 elif outcome_filter == 'wicket':
-                    filtered_results = filtered_results[filtered_results['IsWicket'] == 1]
+                    detailed_results = detailed_results[detailed_results['IsWicket'] == 1]
                 elif outcome_filter == 'boundary':
-                    filtered_results = filtered_results[(filtered_results['IsFour'] == 1) | (filtered_results['IsSix'] == 1)]
-
-                # Pitch Map for Individual Bowler
-                if not filtered_results.empty and all(col in filtered_results.columns for col in ['Xpitch_meters', 'Ypitch_meters']):
-                    pitch_map = create_3d_pitch_map(filtered_results, title=f"Pitch Map - {selected_bowler}")
+                    detailed_results = detailed_results[(detailed_results['IsFour'] == 1) | (detailed_results['IsSix'] == 1)]
+                
+                # Pitch Map for Multiple Bowlers
+                if not detailed_results.empty and all(col in detailed_results.columns for col in ['Xpitch_meters', 'Ypitch_meters']):
+                    pitch_map = create_3d_pitch_map(
+                        detailed_results, 
+                        title=f"Pitch Map - {', '.join(selected_bowlers)}"
+                    )
                 else:
                     pitch_map = create_3d_pitch_map(pd.DataFrame(), title="No Data Available")
 
     return table_data, economy_chart, dot_ball_chart, bowl_type_chart, runs_distribution_chart, pitch_map
+
+
 
 # Replace 'YourUsername' with your actual username and 'data.csv' with your actual file name
 #file_path = 'C:/Users/kripa/Desktop/IPL_23_24.csv'
