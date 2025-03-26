@@ -72,7 +72,7 @@ try:
     #current_dir = os.path.expanduser("~/Desktop")
     
     # Build the relative path to the CSV file
-    file_path = os.path.join(current_dir, "BallByBall2023(in).csv")
+    file_path = os.path.join(current_dir, "BallByBall2024(in).csv")
     
     # Load the CSV file
     df = pd.read_csv(file_path)    
@@ -1074,7 +1074,7 @@ import pandas as pd
 #current_dir = os.path.expanduser("~/Desktop")
 
 # Build the relative path to the CSV file
-file_path = os.path.join(current_dir, "BallByBall2023(in).csv")
+file_path = os.path.join(current_dir, "BallByBall2024(in).csv")
 
 # Load the CSV file
 df = pd.read_csv(file_path)
