@@ -37,17 +37,17 @@ app2 = dash.Dash(
     external_stylesheets=['https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css']
 )
 
-app3 = dash.Dash(
-    __name__,
-    server=server,
-    url_base_pathname="/speed-dashboard/",
-    external_stylesheets=['https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css', dbc.themes.BOOTSTRAP]
-)
+# app3 = dash.Dash(
+#     __name__,
+#     server=server,
+#     url_base_pathname="/speed-dashboard/",
+#     external_stylesheets=['https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css', dbc.themes.BOOTSTRAP]
+# )
 
 # Define Dash app layouts
 app.layout = html.Div("Hello, Bowler Dashboard!")
 app2.layout = html.Div("Hello, Batsman Dashboard!")
-app3.layout = html.Div("Hello, Speed Dashboard!")
+#app3.layout = html.Div("Hello, Speed Dashboard!")
 
 # Define color scheme
 COLORS = {
@@ -66,6 +66,10 @@ try:
 
     # Get the current directory of the running script
     current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+
+    # Set the current directory to your desktop
+    #current_dir = os.path.expanduser("~/Desktop")
     
     # Build the relative path to the CSV file
     file_path = os.path.join(current_dir, "BallByBall2023(in).csv")
@@ -991,7 +995,7 @@ import os
 import pandas as pd
 
 # Get the current directory of the running script
-current_dir = os.path.dirname(os.path.abspath(__file__))
+#current_dir = os.path.expanduser("~/Desktop")
 
 # Build the relative path to the CSV file
 file_path = os.path.join(current_dir, "BallByBall2023(in).csv")
@@ -1905,24 +1909,22 @@ def update_dashboard(view_type, selected_bowler, over_name, bowl_type, outcome_f
 # Replace 'YourUsername' with your actual username and 'data.csv' with your actual file name
 #file_path = 'C:/Users/kripa/Desktop/IPL_23_24.csv'
 
-# Get the current directory of the running script
-current_dir = os.path.dirname(os.path.abspath(__file__))
+## Get the current directory of the running script
+#current_dir = os.path.expanduser("~/Desktop")
     
-    # Build the relative path to the CSV file
+# Build the relative path to the CSV files
 file_path1 = os.path.join(current_dir, "IPL_23_HE_part1.csv")
 file_path2 = os.path.join(current_dir, "IPL_23_HE_part2.csv")
 file_path3 = os.path.join(current_dir, "IPL_23_HE_part3.csv")
 file_path4 = os.path.join(current_dir, "IPL_23_HE_part4.csv")
 
+# Load and combine data
 df_part1 = pd.read_csv(file_path1)
 df_part2 = pd.read_csv(file_path2)
 df_part3 = pd.read_csv(file_path3)
 df_part4 = pd.read_csv(file_path4)
 
 combined_df = pd.concat([df_part1, df_part2, df_part3, df_part4], ignore_index=True)
-
-
-
 
 def process_cricket_data(df):
     """
@@ -2006,28 +2008,39 @@ def process_cricket_data(df):
 # Process data
 processed_data = process_cricket_data(combined_df)
 
-def create_dashboard(processed_data):
-    """Create and return the dashboard app with all its components."""
+def create_speed_dashboard(processed_data):
+    """Create and return the speed dashboard app with all its components."""
     
-    # Ensure consistent data types
-    processed_data['match.delivery.deliveryNumber.over'] = processed_data['match.delivery.deliveryNumber.over'].astype(str)
-    processed_data['DELIVERY_TYPE'] = processed_data['DELIVERY_TYPE'].fillna('Unknown').astype(str)
-    processed_data['YEAR'] = processed_data['YEAR'].astype(int)
-    processed_data['BATSMAN'] = processed_data['BATSMAN'].astype(str)
-    
-    # Get unique values for filters
+    # Initialize Dash app with Bootstrap theme
+    app3 = dash.Dash(
+        __name__,
+        server=server,
+        url_base_pathname="/speed-dashboard/",
+        external_stylesheets=[
+            'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css', 
+            dbc.themes.BOOTSTRAP
+        ]
+    )
+
+    # Pre-process the over segment column to ensure consistent format
+    processed_data['match.delivery.deliveryNumber.over'] = processed_data['match.delivery.deliveryNumber.over'].apply(
+        lambda x: str(int(float(x))) if pd.notnull(x) else 'Unknown'
+    )
+    processed_data['DELIVERY_TYPE'] = processed_data['DELIVERY_TYPE'].fillna('Unknown')
+
+    # Filters for dropdowns
     filters = {
-        'over_segments': sorted(processed_data['match.delivery.deliveryNumber.over'].unique()),
-        'years': sorted(processed_data['YEAR'].unique()),
-        'innings': sorted(processed_data['INNINGS_NUMBER'].unique()),
-        'delivery_types': sorted(processed_data['DELIVERY_TYPE'].unique()),
+        'over_segments': sorted([str(int(float(x))) for x in processed_data['match.delivery.deliveryNumber.over'].unique() if pd.notnull(x) and x != 'Unknown']),
+        'years': sorted(processed_data['YEAR'].dropna().unique()),
+        'innings': sorted(processed_data['INNINGS_NUMBER'].dropna().unique()),
+        'delivery_types': sorted(processed_data['DELIVERY_TYPE'].dropna().unique()),
         'speed_categories': sorted(processed_data['SPEED_CATEGORY'].dropna().unique()),
-        'batsmen': sorted(processed_data['BATSMAN'].unique())
+        'batsmen': sorted(processed_data['BATSMAN'].dropna().unique())
     }
 
     # Dashboard layout
     app3.layout = dbc.Container([
-        dbc.Row([dbc.Col(html.H1("Cricket Speed Analytics Dashboard", className="text-center text-primary my-4"))]),
+        dbc.Row([dbc.Col(html.H1("Speed Analytics Dashboard", className="text-center text-primary my-4"))]),
         
         # Filters Section
         dbc.Row([
@@ -2092,33 +2105,18 @@ def create_dashboard(processed_data):
             ])
         ]),
 
-        # Graphs Section
+        # Graphs
         dbc.Row([
             dbc.Col(dcc.Graph(id='performance-chart'), width=8),
             dbc.Col(dcc.Graph(id='speed-distribution'), width=4)
         ]),
 
-        # Data Table Section
-        dbc.Row([
-            dbc.Col(dash_table.DataTable(
-                id='stats-table',
-                style_table={'overflowX': 'auto'},
-                style_cell={
-                    'minWidth': '100px', 'width': '150px', 'maxWidth': '300px',
-                    'whiteSpace': 'normal',
-                    'textAlign': 'left'
-                },
-                page_size=10
-            ))
-        ]),
+        dbc.Row([dbc.Col(dash_table.DataTable(id='stats-table', style_table={'overflowX': 'auto'}))]),
 
-        # Trends Section
-        dbc.Row([
-            dbc.Col(dcc.Graph(id='trend-chart'))
-        ]),
+        # Trends tab
+        dbc.Row([dbc.Col(dcc.Graph(id='trend-chart'))]),
     ], fluid=True)
 
-    # Dashboard Callback
     @app3.callback(
         [Output('performance-chart', 'figure'),
          Output('speed-distribution', 'figure'),
@@ -2133,71 +2131,72 @@ def create_dashboard(processed_data):
          State('speed-category-dropdown', 'value')]
     )
     def update_dashboard(n_clicks, batsmen, years, segments, delivery_types, speed_categories):
-        # Start with full dataset
+        # Filter data
         filtered_df = processed_data.copy()
-        
-        # Apply filters only if values are selected
+
+        # Step 1: Ensure correct data types and handle NaN values
+        filtered_df['BATSMAN'] = filtered_df['BATSMAN'].astype(str)
+        filtered_df['YEAR'] = filtered_df['YEAR'].astype(int)
+        filtered_df['match.delivery.deliveryNumber.over'] = filtered_df['match.delivery.deliveryNumber.over'].astype(str)
+        filtered_df['DELIVERY_TYPE'] = filtered_df['DELIVERY_TYPE'].astype(str)
+        filtered_df['SPEED_CATEGORY'] = filtered_df['SPEED_CATEGORY'].astype(str)
+
+        # Apply filters 
         if batsmen:
             filtered_df = filtered_df[filtered_df['BATSMAN'].isin(batsmen)]
         if years:
             filtered_df = filtered_df[filtered_df['YEAR'].isin(years)]
         if segments:
+            # Convert segments to strings and handle the filtering properly
+            segments = [str(seg) for seg in segments]
             filtered_df = filtered_df[filtered_df['match.delivery.deliveryNumber.over'].isin(segments)]
         if delivery_types:
             filtered_df = filtered_df[filtered_df['DELIVERY_TYPE'].isin(delivery_types)]
         if speed_categories:
             filtered_df = filtered_df[filtered_df['SPEED_CATEGORY'].isin(speed_categories)]
 
-        # Group and aggregate data
+        # Convert columns to numeric where necessary
+        filtered_df['RUNS_SCORED'] = pd.to_numeric(filtered_df['RUNS_SCORED'], errors='coerce')
+        filtered_df['BALLS_FACED'] = pd.to_numeric(filtered_df['BALLS_FACED'], errors='coerce')
+
+        # Group and calculate performance
         grouped_df = filtered_df.groupby(
             ['BATSMAN', 'YEAR', 'match.delivery.deliveryNumber.over', 'DELIVERY_TYPE', 'SPEED_CATEGORY'],
             as_index=False
-        ).agg({
-            'RUNS_SCORED': 'sum',
-            'BALLS_FACED': 'count',
-            'Speed': 'mean'
-        }).rename(columns={'Speed': 'AVG_SPEED'})
+        ).agg({'RUNS_SCORED': 'sum', 'BALLS_FACED': 'count'})
 
-        # Calculate strike rate (handle division by zero)
-        grouped_df['STRIKE_RATE'] = (grouped_df['RUNS_SCORED'] / 
-                                    grouped_df['BALLS_FACED'].replace(0, np.nan) * 100).round(2)
-        
-        # Create visualizations
-        perf_chart = px.bar(
-            grouped_df,
-            x='SPEED_CATEGORY',
-            y='STRIKE_RATE',
-            color='BATSMAN',
-            title="Strike Rate by Speed Category",
-            labels={'STRIKE_RATE': 'Strike Rate', 'SPEED_CATEGORY': 'Speed (kph)'}
-        )
-        
-        speed_dist_chart = px.histogram(
-            grouped_df,
-            x='SPEED_CATEGORY',
-            title="Speed Distribution",
-            color='DELIVERY_TYPE'
-        )
-        
-        trend_chart = px.line(
-            grouped_df,
-            x='YEAR',
-            y='STRIKE_RATE',
-            color='BATSMAN',
-            title="Performance Trend Over Years",
-            markers=True
-        )
+        # Calculate strike rate
+        grouped_df['STRIKE_RATE'] = (grouped_df['RUNS_SCORED'] / grouped_df['BALLS_FACED'].replace(0, np.nan) * 100).round(2)
+        grouped_df = grouped_df.dropna(subset=['STRIKE_RATE'])
 
-        # Prepare table data
+        # Calculate average strike rate by speed category
+        avg_strike_rate_df = grouped_df.groupby('SPEED_CATEGORY', as_index=False).agg({'STRIKE_RATE': 'mean'})
+
+        # Create plots
+        perf_chart = px.bar(avg_strike_rate_df, x='SPEED_CATEGORY', y='STRIKE_RATE', 
+                           title="Speed Category vs Average Strike Rate", 
+                           color='SPEED_CATEGORY', template='plotly_white')
+        
+        speed_dist_chart = px.histogram(grouped_df, x='SPEED_CATEGORY', 
+                                      title="Speed Category Distribution", 
+                                      color='SPEED_CATEGORY', template='plotly_white')
+        
+        trend_chart = px.line(grouped_df, x='YEAR', y='STRIKE_RATE', 
+                            color='BATSMAN', title="Performance Trends")
+
+        # Convert data to table format
         table_data = grouped_df.to_dict('records')
         table_columns = [{'name': col, 'id': col} for col in grouped_df.columns]
 
         return perf_chart, speed_dist_chart, trend_chart, table_data, table_columns
-    
 
+    return app3
 
-# Create dashboard
-create_dashboard(processed_data)    
+# Load processed data (replace with your data loading method)
+processed_data1 = processed_data.copy()  # Placeholder, replace with actual data loading
+
+# Create Speed Dashboard
+app3 = create_speed_dashboard(processed_data1)
 
 # Define the home route (must come AFTER Dash apps are initialized)
 @server.route("/")
