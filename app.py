@@ -110,6 +110,9 @@ def analyze_post_dot_ball_response(df):
     """
     # Create a copy to avoid modifying original
     analysis_df = df.copy()
+    analysis_df = analysis_df.sort_values(by=['MatchID', 'InningsNo', 'OverNo', 'BallNo'])
+
+
 
     # Ensure ActualRuns is numeric
     analysis_df['ActualRuns'] = pd.to_numeric(analysis_df['ActualRuns'], errors='coerce')
@@ -1149,6 +1152,9 @@ def analyze_post_boundary_response(df, bowler_names=None, grouping_columns=None)
     """
     # Create a copy to avoid modifying original
     analysis_df = df.copy()
+    analysis_df = analysis_df.sort_values(by=['MatchID', 'InningsNo', 'OverNo', 'BallNo'])
+
+
     
     # Filter by bowler names if provided
     if bowler_names is not None:
